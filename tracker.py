@@ -7,43 +7,29 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from datetime import datetime
 
 
-# Функция для отображения всплывающих подсказок
-def create_tooltip(widget, text):
-    tooltip = Toplevel(widget)
-    tooltip.wm_overrideredirect(True)
-    tooltip.geometry(f"+{widget.winfo_rootx() + 20}+{widget.winfo_rooty() + 20}")
-    label = Label(tooltip, text=text, background="lightyellow", relief="solid", borderwidth=1)
-    label.pack(padx=5, pady=5)
-    tooltip.withdraw()
-
-    def on_enter(event):
-        tooltip.deiconify()
-
-    def on_leave(event):
-        tooltip.withdraw()
-
-    widget.bind("<Enter>", on_enter)
-    widget.bind("<Leave>", on_leave)
-
-
 # Создание базы данных
-conn = sqlite3.connect("expenses.db")
-cursor = conn.cursor()
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS expenses (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    date TEXT NOT NULL,
-    category TEXT NOT NULL,
-    amount REAL NOT NULL
-)
-""")
-conn.commit()
+def initialize_database():
+    connection = sqlite3.connect("expenses.db")
+    cursor = connection.cursor()
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS expenses (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        date TEXT NOT NULL,
+        category TEXT NOT NULL,
+        amount REAL NOT NULL
+    )
+    """)
+    connection.commit()
+    return connection, cursor
+
+
+conn, cursor = initialize_database()
 
 
 # Функции приложения
 def add_expense():
     date = date_entry.get()
-    category = category_entry.get()
+    category = category_entry.get().strip()
     amount = amount_entry.get()
 
     if not date or not category or not amount:
@@ -56,17 +42,16 @@ def add_expense():
         ctk.CTkMessagebox.show_error("Ошибка", "Сумма должна быть числом!")
         return
 
-    # Проверка формата даты
     try:
-        datetime.strptime(date, "%Y-%m-%d")  # Проверка на корректность даты
+        datetime.strptime(date, "%Y-%m-%d")
     except ValueError:
         ctk.CTkMessagebox.show_error("Ошибка", "Неверный формат даты! Используйте yyyy-mm-dd.")
         return
 
-    # Добавление записи в базу данных
     cursor.execute("INSERT INTO expenses (date, category, amount) VALUES (?, ?, ?)", (date, category, amount))
     conn.commit()
     update_expense_list()
+    update_total_label()
     ctk.CTkMessagebox.show_info("Успех", "Расход добавлен!")
 
 
@@ -81,7 +66,10 @@ def update_expense_list(start_date=None, end_date=None, category=None):
         params.extend([start_date, end_date])
 
     if category:
-        query += " AND category = ?"
+        if "WHERE" in query:
+            query += " AND category = ?"
+        else:
+            query += " WHERE category = ?"
         params.append(category)
 
     cursor.execute(query, tuple(params))
@@ -90,35 +78,27 @@ def update_expense_list(start_date=None, end_date=None, category=None):
         expense_list.insert("", "end", values=row)
 
 
+def update_total_label():
+    cursor.execute("SELECT SUM(amount) FROM expenses")
+    total = cursor.fetchone()[0] or 0.0
+    total_label.configure(text=f"Общая сумма: {total:.2f} руб.")
+
+
+
 def delete_expense():
     selected_items = expense_list.selection()
     if not selected_items:
         ctk.CTkMessagebox.show_error("Ошибка", "Выберите записи для удаления!")
         return
 
-    def confirm_delete():
-        for item in selected_items:
-            expense_id = expense_list.item(item, "values")[0]
-            cursor.execute("DELETE FROM expenses WHERE id = ?", (expense_id,))
-            conn.commit()
-            expense_list.delete(item)
-        ctk.CTkMessagebox.show_info("Успех", "Расходы удалены!")
+    for item in selected_items:
+        expense_id = expense_list.item(item, "values")[0]
+        cursor.execute("DELETE FROM expenses WHERE id = ?", (expense_id,))
+        conn.commit()
+        expense_list.delete(item)
 
-    def cancel_delete():
-        confirm_window.destroy()
-
-    confirm_window = Toplevel(app)
-    confirm_window.title("Подтверждение удаления")
-    confirm_window.geometry("300x150")
-
-    label = ctk.CTkLabel(confirm_window, text="Вы уверены, что хотите удалить выбранные расходы?")
-    label.pack(pady=20)
-
-    yes_button = ctk.CTkButton(confirm_window, text="Да", command=confirm_delete)
-    yes_button.pack(side="left", padx=20)
-
-    no_button = ctk.CTkButton(confirm_window, text="Нет", command=cancel_delete)
-    no_button.pack(side="right", padx=20)
+    update_total_label()
+    ctk.CTkMessagebox.show_info("Успех", "Расходы удалены!")
 
 
 def analyze_expenses():
@@ -156,10 +136,9 @@ def analyze_expenses():
 def save_database():
     file_path = filedialog.asksaveasfilename(defaultextension=".db", filetypes=[("SQLite Database", "*.db")])
     if file_path:
-        conn_backup = sqlite3.connect(file_path)
         with open('expenses.db', 'rb') as source:
-            conn_backup.write(source.read())
-        conn_backup.close()
+            with open(file_path, 'wb') as target:
+                target.write(source.read())
         ctk.CTkMessagebox.show_info("Успех", "База данных сохранена!")
 
 
@@ -171,6 +150,7 @@ def load_database():
         conn = sqlite3.connect(file_path)
         cursor = conn.cursor()
         update_expense_list()
+        update_total_label()
         ctk.CTkMessagebox.show_info("Успех", "База данных загружена!")
 
 
@@ -179,7 +159,6 @@ app = ctk.CTk()
 app.title("Трекер расходов")
 app.geometry("800x600")
 
-# Адаптация сетки
 app.grid_rowconfigure(6, weight=1)
 app.grid_columnconfigure(1, weight=1)
 
@@ -196,20 +175,17 @@ ctk.CTkLabel(app, text="Сумма:").grid(row=2, column=0, padx=10, pady=5, sti
 amount_entry = ctk.CTkEntry(app)
 amount_entry.grid(row=2, column=1, padx=10, pady=5, sticky="ew")
 
-# Кнопки
+# Кнопки управления
 add_button = ctk.CTkButton(app, text="Добавить", command=add_expense)
 add_button.grid(row=3, column=0, padx=10, pady=10, sticky="ew")
-create_tooltip(add_button, "Нажмите для добавления нового расхода.")
 
 delete_button = ctk.CTkButton(app, text="Удалить", command=delete_expense)
 delete_button.grid(row=3, column=1, padx=10, pady=10, sticky="ew")
-create_tooltip(delete_button, "Нажмите для удаления выбранных расходов.")
 
 analyze_button = ctk.CTkButton(app, text="Анализировать", command=analyze_expenses)
 analyze_button.grid(row=3, column=2, padx=10, pady=10, sticky="ew")
-create_tooltip(analyze_button, "Нажмите для анализа расходов.")
 
-# Фильтрация по датам
+# Фильтры
 ctk.CTkLabel(app, text="Начальная дата:").grid(row=4, column=0, padx=10, pady=5, sticky="w")
 start_date_entry = DateEntry(app, date_pattern="yyyy-mm-dd", background="darkblue", foreground="white", borderwidth=2)
 start_date_entry.grid(row=4, column=1, padx=10, pady=5, sticky="ew")
@@ -218,16 +194,11 @@ ctk.CTkLabel(app, text="Конечная дата:").grid(row=5, column=0, padx=
 end_date_entry = DateEntry(app, date_pattern="yyyy-mm-dd", background="darkblue", foreground="white", borderwidth=2)
 end_date_entry.grid(row=5, column=1, padx=10, pady=5, sticky="ew")
 
-filter_button = ctk.CTkButton(app, text="Применить фильтр",
-                              command=lambda: update_expense_list(start_date=start_date_entry.get(),
-                                                                  end_date=end_date_entry.get()))
+filter_button = ctk.CTkButton(app, text="Применить фильтр", command=lambda: update_expense_list(start_date=start_date_entry.get(), end_date=end_date_entry.get()))
 filter_button.grid(row=5, column=2, padx=10, pady=10, sticky="ew")
-create_tooltip(filter_button, "Примените фильтр для дат.")
 
-# Кнопка для сброса фильтра
 reset_filter_button = ctk.CTkButton(app, text="Сбросить фильтр", command=lambda: update_expense_list())
 reset_filter_button.grid(row=5, column=3, padx=10, pady=10, sticky="ew")
-create_tooltip(reset_filter_button, "Сбросить все фильтры.")
 
 # Таблица расходов
 columns = ("id", "date", "category", "amount")
@@ -238,23 +209,22 @@ expense_list.heading("category", text="Категория")
 expense_list.heading("amount", text="Сумма")
 expense_list.grid(row=6, column=0, columnspan=4, padx=10, pady=10, sticky="nsew")
 
-# Прокрутка для таблицы
 scrollbar = ttk.Scrollbar(app, orient="vertical", command=expense_list.yview)
 expense_list.configure(yscroll=scrollbar.set)
 scrollbar.grid(row=6, column=4, sticky="ns")
 
-# Кнопки для сохранения и загрузки базы данных
+# Общая сумма расходов
+total_label = ctk.CTkLabel(app, text="Общая сумма: 0.00 руб.")
+total_label.grid(row=7, column=0, columnspan=4, pady=10)
+
+# Кнопки для базы данных
 save_button = ctk.CTkButton(app, text="Сохранить базу данных", command=save_database)
-save_button.grid(row=7, column=0, padx=10, pady=10, sticky="ew")
-create_tooltip(save_button, "Сохранить текущую базу данных.")
+save_button.grid(row=8, column=0, padx=10, pady=10, sticky="ew")
 
 load_button = ctk.CTkButton(app, text="Загрузить базу данных", command=load_database)
-load_button.grid(row=7, column=1, padx=10, pady=10, sticky="ew")
-create_tooltip(load_button, "Загрузить базу данных из файла.")
+load_button.grid(row=8, column=1, padx=10, pady=10, sticky="ew")
 
 update_expense_list()
-
-# Закрытие соединения с базой данных
-conn.close()
+update_total_label()
 
 app.mainloop()
