@@ -238,6 +238,19 @@ save_button.grid(row=8, column=0, padx=10, pady=10, sticky="ew")
 load_button = ctk.CTkButton(app, text="Загрузить базу данных", command=load_database)
 load_button.grid(row=8, column=1, padx=10, pady=10, sticky="ew")
 
+# Кнопка для смены темы
+def toggle_theme():
+    current_mode = ctk.get_appearance_mode()
+    if current_mode == "Light":
+        ctk.set_appearance_mode("Dark")  # Устанавливаем тёмную тему
+    else:
+        ctk.set_appearance_mode("Light")  # Устанавливаем светлую тему
+    update_expense_list()  # Обновление данных, чтобы стиль применился корректно
+    update_total_label()  # Обновление общей суммы для корректного отображения
+
+theme_button = ctk.CTkButton(app, text="Сменить тему", command=toggle_theme)
+theme_button.grid(row=8, column=2, padx=10, pady=10, sticky="ew")
+
 update_expense_list()
 update_total_label()
 
