@@ -1,5 +1,5 @@
 import customtkinter as ctk
-from tkinter import ttk, filedialog, Toplevel, Label
+from tkinter import ttk, filedialog, messagebox
 from tkcalendar import DateEntry
 import sqlite3
 import matplotlib.pyplot as plt
@@ -33,26 +33,26 @@ def add_expense():
     amount = amount_entry.get()
 
     if not date or not category or not amount:
-        ctk.CTkMessagebox.show_error("Ошибка", "Все поля должны быть заполнены!")
+        messagebox.showerror("Ошибка", "Все поля должны быть заполнены!")
         return
 
     try:
         amount = float(amount)
     except ValueError:
-        ctk.CTkMessagebox.show_error("Ошибка", "Сумма должна быть числом!")
+        messagebox.showerror("Ошибка", "Сумма должна быть числом!")
         return
 
     try:
         datetime.strptime(date, "%Y-%m-%d")
     except ValueError:
-        ctk.CTkMessagebox.show_error("Ошибка", "Неверный формат даты! Используйте yyyy-mm-dd.")
+        messagebox.showerror("Ошибка", "Неверный формат даты! Используйте yyyy-mm-dd.")
         return
 
     cursor.execute("INSERT INTO expenses (date, category, amount) VALUES (?, ?, ?)", (date, category, amount))
     conn.commit()
     update_expense_list()
     update_total_label()
-    ctk.CTkMessagebox.show_info("Успех", "Расход добавлен!")
+    messagebox.showinfo("Успех", "Расход добавлен!")
 
 
 def update_expense_list(start_date=None, end_date=None, category=None):
@@ -84,11 +84,10 @@ def update_total_label():
     total_label.configure(text=f"Общая сумма: {total:.2f} руб.")
 
 
-
 def delete_expense():
     selected_items = expense_list.selection()
     if not selected_items:
-        ctk.CTkMessagebox.show_error("Ошибка", "Выберите записи для удаления!")
+        messagebox.showerror("Ошибка", "Выберите записи для удаления!")
         return
 
     for item in selected_items:
@@ -98,7 +97,7 @@ def delete_expense():
         expense_list.delete(item)
 
     update_total_label()
-    ctk.CTkMessagebox.show_info("Успех", "Расходы удалены!")
+    messagebox.showinfo("Успех", "Расходы удалены!")
 
 
 def analyze_expenses():
@@ -106,7 +105,7 @@ def analyze_expenses():
     data = cursor.fetchall()
 
     if not data:
-        ctk.CTkMessagebox.show_error("Ошибка", "Нет данных для анализа!")
+        messagebox.showerror("Ошибка", "Нет данных для анализа!")
         return
 
     categories = [row[0] for row in data]
@@ -139,7 +138,7 @@ def save_database():
         with open('expenses.db', 'rb') as source:
             with open(file_path, 'wb') as target:
                 target.write(source.read())
-        ctk.CTkMessagebox.show_info("Успех", "База данных сохранена!")
+        messagebox.showinfo("Успех", "База данных сохранена!")
 
 
 def load_database():
@@ -151,7 +150,7 @@ def load_database():
         cursor = conn.cursor()
         update_expense_list()
         update_total_label()
-        ctk.CTkMessagebox.show_info("Успех", "База данных загружена!")
+        messagebox.showinfo("Успех", "База данных загружена!")
 
 
 # Интерфейс приложения
