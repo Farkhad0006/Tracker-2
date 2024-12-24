@@ -29,7 +29,7 @@ conn, cursor = initialize_database()
 # Функции приложения
 def add_expense():
     date = date_entry.get()
-    category = category_entry.get().strip()
+    category = category_var.get().strip()
     amount = amount_entry.get()
 
     if not date or not category or not amount:
@@ -153,6 +153,13 @@ def load_database():
         messagebox.showinfo("Успех", "База данных загружена!")
 
 
+# Функция проверки, чтобы ввод был числовым
+def validate_number_input(char, entry_value):
+    if char.isdigit() or char == ".":
+        return True
+    return False
+
+
 # Интерфейс приложения
 app = ctk.CTk()
 app.title("Трекер расходов")
@@ -167,11 +174,19 @@ date_entry = DateEntry(app, date_pattern="yyyy-mm-dd", background="darkblue", fo
 date_entry.grid(row=0, column=1, padx=10, pady=5, sticky="ew")
 
 ctk.CTkLabel(app, text="Категория:").grid(row=1, column=0, padx=10, pady=5, sticky="w")
-category_entry = ctk.CTkEntry(app)
-category_entry.grid(row=1, column=1, padx=10, pady=5, sticky="ew")
+
+# Список категорий
+categories_list = ["Продукты", "Транспорт", "Развлечения", "Жилье", "Здоровье", "Другое"]
+category_var = ctk.StringVar(value=categories_list[0])  # Default category is the first one
+
+category_option_menu = ctk.CTkOptionMenu(app, variable=category_var, values=categories_list)
+category_option_menu.grid(row=1, column=1, padx=10, pady=5, sticky="ew")
 
 ctk.CTkLabel(app, text="Сумма:").grid(row=2, column=0, padx=10, pady=5, sticky="w")
-amount_entry = ctk.CTkEntry(app)
+
+# Настройка валидации для поля "Сумма"
+validate_command = (app.register(validate_number_input), '%S', '%P')
+amount_entry = ctk.CTkEntry(app, validate='key', validatecommand=validate_command)
 amount_entry.grid(row=2, column=1, padx=10, pady=5, sticky="ew")
 
 # Кнопки управления
